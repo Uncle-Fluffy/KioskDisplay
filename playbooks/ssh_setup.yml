@@ -1,0 +1,61 @@
+---
+- name: Set up SSH access for a new host
+  hosts: "{{ target_host }}"
+  become: yes  # Use sudo to ensure we can write to the system files
+  gather_facts: no
+  vars:
+    ansible_user: tcarter  # Define the username as a variable
+
+  tasks:
+    - name: Create .ssh directory
+      file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Add SSH public key to authorized_keys
+      authorized_key:
+        path: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+        user: "{{ ansible_user }}"
+        key: "{{ lookup('file', '/Users/terrycarter/.ssh/id_ed25519.pub') }}"
+        state: present
+        mode: '0600'
+
+    - name: Ensure proper ownership of the .ssh folder and authorized_keys file
+      file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        recurse: yes
+
+    - name: Ensure the authorized_keys file has the correct permissions
+      file:
+        path: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+
+# -----------------------------------------------------
+# Note: Before running this playbook, SSH into the machine once to store the host key:
+# ssh tcarter@<TARGET_IP>
+#
+# This ensures the target machine is recognized and avoids SSH connection errors.
+#
+# To execute this playbook, run the following command:
+# ansible-playbook ssh_setup.yml --extra-vars "target_host=<TARGET_IP>"
+#
+# Replace <TARGET_IP> with the IP address of the machine you want to set up.
+# Example:
+# ansible-playbook ssh_setup.yml --extra-vars "target_host=192.168.1.11"
+#
+# After running the playbook and confirming success, remember to add the new IP address
+# to your `hosts.ini` file so you can easily target it in future Ansible runs.
+#
+# Example: Add a new entry for the target host:
+# [new_hosts]
+# 192.168.1.11
+#
+# This will allow you to manage the host without needing to specify the IP manually each time.
+

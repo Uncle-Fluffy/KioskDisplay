@@ -4,3 +4,5 @@
 # Ignore photo folder (not part of Git)
 ../FamilyPhotos/
 
+# Ignore vs code settings
+.vscode/settings.json

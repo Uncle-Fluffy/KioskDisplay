@@ -1,0 +1,6 @@
+# Ignore Mac system files
+.DS_Store
+
+# Ignore photo folder (not part of Git)
+../FamilyPhotos/
+

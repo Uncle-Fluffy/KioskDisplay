@@ -1,0 +1,8 @@
+---
+- name: Ping all kiosk displays
+  hosts: kiosk_displays
+  gather_facts: no
+
+  tasks:
+    - name: Ping each host
+      ansible.builtin.ping:

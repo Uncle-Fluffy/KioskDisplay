@@ -1,0 +1,86 @@
+---
+- name: Perform base setup on new hosts
+  hosts: all
+  become: yes
+  vars:
+    ansible_user: tcarter
+    slideshow_script_local: "../files/start-slideshow.sh"  # Relative path to start-slideshow.sh
+    slideshow_script_remote: "/home/{{ ansible_user }}/start-slideshow.sh"
+    systemd_service_local: "../files/fbi-slideshow.service"  # Relative path to fbi-slideshow.service
+    systemd_service_remote: "/etc/systemd/system/fbi-slideshow.service"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+
+    - name: Autoremove unnecessary packages
+      apt:
+        autoremove: yes
+
+    - name: Install required packages
+      apt:
+        name: fbi
+        state: present
+
+    - name: Copy start-slideshow.sh script to remote
+      copy:
+        src: "{{ slideshow_script_local }}"
+        dest: "{{ slideshow_script_remote }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+
+    - name: Copy systemd service to enable fbi slideshow
+      copy:
+        src: "{{ systemd_service_local }}"
+        dest: "{{ systemd_service_remote }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload systemd to recognize new service
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure system boots to multi-user target (no GUI)
+      command: systemctl set-default multi-user.target
+      when: ansible_facts['distribution'] == 'Raspbian' or ansible_facts['distribution'] == 'Debian'
+
+    - name: Enable fbi-slideshow service
+      systemd:
+        name: fbi-slideshow
+        enabled: yes
+
+    - name: Start fbi-slideshow service
+      systemd:
+        name: fbi-slideshow
+        state: started
+
+# -----------------------------------------------------
+# To execute this playbook:
+# - To run on all hosts listed in the hosts.ini file:
+#   ansible-playbook playbooks/base_setup.yml
+#
+# - To run on a specific host:
+#   ansible-playbook playbooks/base_setup.yml --limit <target_ip>
+#
+# If the fbi-slideshow service doesn't start on reboot:
+# - Make sure the service is enabled
+#   sudo systemctl status fbi-slideshow
+# - If it's not enabled, to enable and start on boot:
+#   sudo systemctl enable fbi-slideshow
+# - If it is enabled, try restarting the services
+#   sudo systemctl restart fbi-slideshow
+# - If it still doesn't start, check logs for issues:
+#   sudo journalctl -u fbi-slideshow
+#   This will provide detailed logs of the service's behavior.
+#
+# To execute the start-slideshow.sh script directly, run:
+#   sudo ./start-slideshow.sh
+#

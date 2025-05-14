@@ -1,0 +1,66 @@
+---
+- name: Dimming images based on schedule
+  hosts: all
+  tasks:
+    - name: Install imagemagick for image manipulation
+      apt:
+        name: imagemagick
+        state: present
+        update_cache: yes
+      become: yes
+
+    - name: Create dimmed directories for 30x0 and 70x0 levels
+      file:
+        path: "/home/tcarter/Pictures/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - evening
+        - night
+
+    - name: Copy and dim images to 30x0 if not already present
+      shell: |
+        for i in /home/tcarter/Pictures/*.jpg; do
+          name=$(basename "$i")
+          target="/home/tcarter/Pictures/evening/$name"
+          [ -f "$target" ] || convert "$i" -brightness-contrast -30x0 "$target"
+        done
+      args:
+        executable: /bin/bash
+
+    - name: Copy and dim images to 70x0 if not already present
+      shell: |
+        for i in /home/tcarter/Pictures/*.jpg; do
+          name=$(basename "$i")
+          target="/home/tcarter/Pictures/night/$name"
+          [ -f "$target" ] || convert "$i" -brightness-contrast -70x0 "$target"
+        done
+      args:
+        executable: /bin/bash
+
+    - name: Set up cron job to show evening images at dusk
+      cron:
+        name: "Evening images"
+        job: "sudo pkill fbi; sudo fbi -T 1 -a --noverbose -t 10 /home/tcarter/Pictures/evening/*.jpg"
+        state: present
+        user: tcarter
+        hour: "18"
+        minute: "00"
+
+    - name: Set up cron job to show night images at 10 PM
+      cron:
+        name: "Night images"
+        minute: "0"
+        hour: "22"
+        job: "sudo pkill fbi; sudo fbi -T 1 -a --noverbose -t 10 /home/tcarter/Pictures/night/*.jpg"
+        state: present
+        user: tcarter
+
+    - name: Set up cron job to show day images at 7:30 AM
+      cron:
+        name: "Day images"
+        minute: "30"
+        hour: "7"
+        job: "sudo pkill fbi; sudo fbi -T 1 -a --noverbose -t 10 /home/tcarter/Pictures/*.jpg"
+        state: present
+        user: tcarter

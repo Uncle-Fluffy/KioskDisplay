@@ -23,10 +23,24 @@
       apt:
         autoremove: yes
 
-    - name: Install required packages
+    - name: Install fbi
       apt:
         name: fbi
         state: present
+
+    - name: Install jq
+      apt:
+        name: jq
+        state: present
+
+    - name: Create dimmed directories for evening and night
+      file:
+        path: "/home/tcarter/Pictures/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - evening
+        - night
 
     - name: Copy start-slideshow.sh script to remote
       copy:
@@ -62,6 +76,14 @@
         name: fbi-slideshow
         state: started
 
+    - name: Set up hourly slideshow script execution
+          ansible.builtin.cron:
+            name: "Hourly run start-slideshow.sh"
+            job: "sudo pkill fbi; sleep 1; sudo /home/tcarter/start-slideshow.sh"
+            state: present
+            user: tcarter
+            hour: "*"
+            minute: "0"
 # -----------------------------------------------------
 # To execute this playbook:
 # - To run on all hosts listed in the hosts.ini file:

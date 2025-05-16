@@ -57,10 +57,7 @@
         owner: root
         group: root
         mode: '0644'
-
-    - name: Reload systemd to recognize new service
-      systemd:
-        daemon_reload: yes
+      notify: Restart fbi-slideshow
 
     - name: Ensure system boots to multi-user target (no GUI)
       command: systemctl set-default multi-user.target
@@ -76,14 +73,13 @@
         name: fbi-slideshow
         state: started
 
-    - name: Set up hourly slideshow script execution
-          ansible.builtin.cron:
-            name: "Hourly run start-slideshow.sh"
-            job: "sudo pkill fbi; sleep 1; sudo /home/tcarter/start-slideshow.sh"
-            state: present
-            user: tcarter
-            hour: "*"
-            minute: "0"
+  handlers: # Add this section at the end of your playbook (same indentation level as 'tasks')
+    - name: Restart fbi-slideshow
+      systemd:
+        name: fbi-slideshow
+        state: restarted
+        daemon_reload: yes
+
 # -----------------------------------------------------
 # To execute this playbook:
 # - To run on all hosts listed in the hosts.ini file:

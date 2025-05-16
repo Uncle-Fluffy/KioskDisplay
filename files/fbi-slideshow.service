@@ -1,14 +1,16 @@
 [Unit]
-Description=Start FBI Slideshow
-After=multi-user.target
-Requires=dev-tty1.device
+Description=Dynamic Long-Running Slideshow Service
+After=network-online.target graphical.target # Ensures network and basic graphics are ready
+Wants=network-online.target
 
 [Service]
-ExecStart=/home/tcarter/start-slideshow.sh
-Type=oneshot
 User=root
 Group=root
-RemainAfterExit=yes
+ExecStart=/home/tcarter/start-slideshow.sh # <--- IMPORTANT: Full path to YOUR NEW SCRIPT
+Restart=always                                    # Restart if it crashes
+RestartSec=30                                     # Wait 30s before restart
+StandardOutput=null                               # No stdout logging to SD card
+StandardError=null                                # No stderr logging to SD card
 
 [Install]
 WantedBy=multi-user.target

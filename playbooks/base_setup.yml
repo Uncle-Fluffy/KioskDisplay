@@ -1,5 +1,5 @@
 ---
-- name: Perform base setup on new hosts
+- name: Base setup on all hosts
   hosts: all
   become: yes
   vars:

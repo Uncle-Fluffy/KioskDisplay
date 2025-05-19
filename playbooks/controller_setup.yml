@@ -1,0 +1,30 @@
+---
+- name: Setup controller pi (pi0-0)
+  hosts: controller_pi
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+
+    - name: Autoremove unnecessary packages
+      apt:
+        autoremove: yes
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+      notify: Start Nginx
+
+  handlers:
+    - name: Start Nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes

@@ -2,7 +2,7 @@
 sleep 5
 
 CACHE_FILE="$HOME/.sunwait_location"
-FBPID_FILE="/tmp/.slideshow_fbi.pid" # Store PID in /tmp
+#FBPID_FILE="/tmp/.slideshow_fbi.pid" # Store PID in /tmp
 
 # --- Time Definitions (Human Friendly Integer Input) ---
 # Define times as HHMM (e.g., 800 for 8:00, 730 for 7:30, 2200 for 10:00 PM)
@@ -10,15 +10,8 @@ MORNING_START_TIME_HHMM=800  # Represents 08:00 AM
 NIGHT_START_TIME_HHMM=2200   # Represents 10:00 PM (22:00)
 
 # --- Calculate minutes since midnight from HHMM format ---
-# For MORNING_START_TIME_HHMM
-morning_start_hour_calc=$((MORNING_START_TIME_HHMM / 100)) # Use temp var name to avoid conflict if debugging
-morning_start_minute_calc=$((MORNING_START_TIME_HHMM % 100))
-MORNING_START_MINUTES=$(( (morning_start_hour_calc * 60) + morning_start_minute_calc ))
-
-# For NIGHT_START_TIME_HHMM
-night_start_hour_calc=$((NIGHT_START_TIME_HHMM / 100))
-night_start_minute_calc=$((NIGHT_START_TIME_HHMM % 100))
-NIGHT_START_MINUTES=$(( (night_start_hour_calc * 60) + night_start_minute_calc ))
+MORNING_START_MINUTES=$(( ( (MORNING_START_TIME_HHMM / 100) * 60) + (MORNING_START_TIME_HHMM % 100) ))
+NIGHT_START_MINUTES=$(( ( (NIGHT_START_TIME_HHMM / 100) * 60) + (NIGHT_START_TIME_HHMM % 100) ))
 
 # Function to get location (cached or fetched)
 get_location() {
@@ -72,28 +65,15 @@ determine_target_dir() {
 # Function to start FBI
 start_fbi() {
     local dir_to_show="$1"
-    [ -z "$dir_to_show" ] && return 1 # Concise check
+    [ -z "$dir_to_show" ] && return 1
     setsid fbi -T 1 -a --noverbose -t 10 "$dir_to_show"/*.jpg > /dev/null 2>&1 &
-    echo $! > "$FBPID_FILE"
 }
 
 # Function to stop FBI
 stop_fbi() {
-    if [ -f "$FBPID_FILE" ]; then
-        local fbi_pid
-        fbi_pid=$(cat "$FBPID_FILE")
-        if kill -0 "$fbi_pid" > /dev/null 2>&1; then
-            kill "$fbi_pid"
-            sleep 1
-            if kill -0 "$fbi_pid" > /dev/null 2>&1; then
-                kill -9 "$fbi_pid"
-            fi
-        fi
-        rm -f "$FBPID_FILE"
-    else
-        # Fallback if PID file is missing
-        pkill -f "fbi -T 1"
-    fi
+    pkill -f "fbi -T 1 -a --noverbose -t 10" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
+    sleep 0.5  # Brief pause to allow processes to terminate
+    pkill -9 -f "fbi -T 1 -a --noverbose -t 10" # Force kill any that didn't respond to SIGTERM (SIGKILL)
 }
 
 # --- Main Logic ---
@@ -120,11 +100,20 @@ while true; do
 
     TARGET_IMG_DIR=$(determine_target_dir "$NOW_MINUTES" "$SUNSET_MINUTES")
 
-    if [ "$TARGET_IMG_DIR" != "$CURRENT_IMG_DIR" ]; then
-        stop_fbi
-        sleep 1
-        start_fbi "$TARGET_IMG_DIR"
-        CURRENT_IMG_DIR="$TARGET_IMG_DIR"
+    # Handle initial start or scheduled transition
+    if [ "$TARGET_IMG_DIR" != "$CURRENT_IMG_DIR" ] || [ -z "$CURRENT_IMG_DIR" ]; then
+        if [ -n "$TARGET_IMG_DIR" ]; then # Ensure TARGET_IMG_DIR is not empty
+            stop_fbi 
+            sleep 1
+            start_fbi "$TARGET_IMG_DIR"
+            CURRENT_IMG_DIR="$TARGET_IMG_DIR"
+        fi
+    # If no scheduled transition, check if fbi for current period is alive
+    elif [ -n "$CURRENT_IMG_DIR" ]; then # Only check if we expect fbi to be running
+        if ! pgrep -f "fbi -T 1 -a --noverbose -t 10" > /dev/null; then
+            # No fbi slideshow running with the core arguments, restart it
+            start_fbi "$CURRENT_IMG_DIR"
+        fi
     fi
 
     sleep 60 # Check every 60 seconds - simpler and reliable for Pi Zero.

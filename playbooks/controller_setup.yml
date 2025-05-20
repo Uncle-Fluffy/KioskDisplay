@@ -2,6 +2,20 @@
 - name: Setup controller pi (pi0-0)
   hosts: controller_pi
   become: yes
+
+  vars:
+    ansible_project_dir_remote: "/home/tcarter/ansible_controller_project" # Ansible project on pi0-0
+    flask_app_subdir_remote: "web_app" # Subdirectory for Flask app within the project
+    
+    # Path on your MAC to the Flask app source (within your Mac's Ansible project)
+    flask_app_source_local: "{{ playbook_dir }}/../application_code/flask_image_processor/"
+    # Path on your MAC to the Ansible project files you want to deploy TO pi0-0
+    # (e.g., base_setup.yml, initial hosts.ini for the client Pis, etc.)
+    # You'll need to create these on your Mac first.
+    # For now, let's assume they are in a subdir like 'ansible_project_files_to_deploy'
+    ansible_project_files_local: "{{ playbook_dir }}/../../ansible_project_files_to_deploy/"
+
+
   tasks:
     - name: Update apt cache
       apt:
@@ -16,11 +30,81 @@
       apt:
         autoremove: yes
 
-    - name: Install Nginx
+    - name: Install base controller packages (Ansible, Nginx, Python, ImageMagick)
       apt:
-        name: nginx
+        name:
+          - ansible  # Install Ansible itself on pi0-0
+          - nginx
+          - python3
+          - python3-pip
+          - python3-venv
+          - imagemagick
+          - git      # Good to have for managing the Ansible project on pi0-0 later
         state: present
       notify: Start Nginx
+
+    - name: Create Ansible project base directory on pi0-0
+      file:
+        path: "{{ ansible_project_dir_remote }}"
+        state: directory
+        owner: tcarter
+        group: tcarter
+        mode: '0755'
+
+    - name: Create standard Ansible subdirectories on pi0-0
+      file:
+        path: "{{ ansible_project_dir_remote }}/{{ item }}"
+        state: directory
+        owner: tcarter
+        group: tcarter
+        mode: '0755'
+      loop:
+        - inventory
+        - playbooks
+        - roles
+        - files
+        - templates
+        - "{{ flask_app_subdir_remote }}" # Creates the web_app directory
+
+    # --- DEPLOY THE FLASK WEB APP ---
+    - name: Copy Flask application files to {{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}
+      ansible.builtin.synchronize:
+        src: "{{ flask_app_source_local }}"
+        dest: "{{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}/"
+        recursive: yes
+        delete: yes
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=uploads/*"
+          - "--exclude=*.pyc"
+      # This task will run as root due to 'become: yes' for the play.
+      # We need to ensure the files end up owned by tcarter.
+      # Synchronize doesn't have a direct owner/group param like copy.
+      # We can fix ownership afterwards or use 'delegate_to' with 'become: no' if rsync allows it.
+      # For now, let's add a follow-up task to fix ownership.
+
+    - name: Ensure correct ownership of deployed Flask app files
+      ansible.builtin.file:
+        path: "{{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}"
+        state: directory
+        owner: tcarter
+        group: tcarter
+        recurse: yes # Apply to all files and subdirectories
+
+    - name: Create Python virtual environment for Flask app
+      ansible.builtin.command:
+        cmd: /usr/bin/python3 -m venv {{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}/venv
+        creates: "{{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}/venv/bin/activate" # Makes task idempotent
+      become_user: tcarter
+      changed_when: false
+
+    - name: Install Python dependencies for Flask app on pi0-0
+      ansible.builtin.pip:
+        requirements: "{{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}/requirements.txt"
+        virtualenv: "{{ ansible_project_dir_remote }}/{{ flask_app_subdir_remote }}/venv"
+      become_user: tcarter
 
   handlers:
     - name: Start Nginx

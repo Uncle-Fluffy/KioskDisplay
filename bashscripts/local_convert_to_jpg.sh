@@ -9,6 +9,22 @@ for imagefile in *.heic *.HEIC; do
   magick "$imagefile" "${imagefile%.*}.jpg" && rm "$imagefile"
 done
 
+# Convert PNG to JPG
+echo "--- Converting PNG files ---"
+for imagefile in *.png *.PNG; do
+  [ -f "$imagefile" ] || continue
+  echo "Converting '$imagefile'..."
+  magick "$imagefile" -quality 85 "${imagefile%.*}.jpg" && rm "$imagefile"
+done
+
+# Convert TIFF to JPG (first page only)
+echo "--- Converting TIFF files ---"
+for imagefile in *.tif *.tiff *.TIF *.TIFF; do
+  [ -f "$imagefile" ] || continue
+  echo "Converting '$imagefile' (first page)..."
+  magick "$imagefile[0]" -quality 85 "${imagefile%.*}.jpg" && rm "$imagefile"
+done
+
 #convert from .JPG or .jpeg or .JPEG to .jpg
 for imagefile in *.JPG *.jpeg *.JPEG; do
   [ -e "$imagefile" ] || continue

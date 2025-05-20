@@ -11,39 +11,60 @@
 
   tasks:
     - name: Update apt cache
-      apt:
+      ansible.builtin.apt:
         update_cache: yes
         cache_valid_time: 3600
 
     - name: Upgrade all packages
-      apt:
+      ansible.builtin.apt:
         upgrade: dist
 
     - name: Autoremove unnecessary packages
-      apt:
+      ansible.builtin.apt:
         autoremove: yes
 
     - name: Install fbi
-      apt:
+      ansible.builtin.apt:
         name: fbi
         state: present
 
     - name: Install jq
-      apt:
+      ansible.builtin.apt:
         name: jq
         state: present
 
     - name: Create dimmed directories for evening and night
-      file:
-        path: "/home/tcarter/Pictures/{{ item }}"
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/Pictures/{{ item }}"
         state: directory
         mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}" # Or the primary group of ansible_user
       loop:
         - evening
         - night
 
+    - name: Check if lightdm.service is active
+      ansible.builtin.command: "systemctl is-active lightdm.service"
+      register: dm_status
+      changed_when: false
+      failed_when: false
+      check_mode: no
+
+    - name: Stop and disable lightdm.service if active
+      ansible.builtin.systemd:
+        name: lightdm.service # Hardcoded directly
+        state: stopped
+        enabled: no
+      when: dm_status.stdout == "active"
+      notify: Reboot Pi for display manager change
+
+    - name: Ensure system boots to multi-user target (no GUI)
+      ansible.builtin.command: systemctl set-default multi-user.target
+      when: ansible_facts['os_family'] == 'Debian'
+
     - name: Copy start-slideshow.sh script to remote
-      copy:
+      ansible.builtin.copy:
         src: "{{ slideshow_script_local }}"
         dest: "{{ slideshow_script_remote }}"
         owner: "{{ ansible_user }}"
@@ -51,7 +72,7 @@
         mode: '0755'
 
     - name: Copy systemd service to enable fbi slideshow
-      copy:
+      ansible.builtin.copy:
         src: "{{ systemd_service_local }}"
         dest: "{{ systemd_service_remote }}"
         owner: root
@@ -59,27 +80,32 @@
         mode: '0644'
       notify: Restart fbi-slideshow
 
-    - name: Ensure system boots to multi-user target (no GUI)
-      command: systemctl set-default multi-user.target
-      when: ansible_facts['distribution'] == 'Raspbian' or ansible_facts['distribution'] == 'Debian'
-
     - name: Enable fbi-slideshow service
-      systemd:
+      ansible.builtin.systemd:
         name: fbi-slideshow
         enabled: yes
 
     - name: Start fbi-slideshow service
-      systemd:
+      ansible.builtin.systemd:
         name: fbi-slideshow
         state: started
 
   handlers: # Add this section at the end of your playbook (same indentation level as 'tasks')
     - name: Restart fbi-slideshow
-      systemd:
+      ansible.builtin.systemd:
         name: fbi-slideshow
         state: restarted
         daemon_reload: yes
 
+    - name: Reboot Pi for display manager change
+      listen: "Reboot Pi for display manager change"
+      ansible.builtin.reboot:
+        msg: "Rebooting Pi to apply display manager change (boot to CLI)."
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
 # -----------------------------------------------------
 # To execute this playbook:
 # - To run on all hosts listed in the hosts.ini file:

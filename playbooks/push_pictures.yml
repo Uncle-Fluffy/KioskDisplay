@@ -1,0 +1,16 @@
+- name: Push picture folders to remote Pis
+  hosts: all
+  gather_facts: no
+  vars_files:
+    - ../vars/picture_hosts.yml
+
+  tasks:
+    - name: Set source folder path
+      set_fact:
+        source_folder: "{{ picture_folder_map[inventory_hostname] }}"
+
+    - name: Rsync pictures to remote host
+      command: >
+        rsync -av --delete /Volumes/PICTURES/KioskDisplay/FamilyPhotos/{{ source_folder }}/
+        tcarter@{{ inventory_hostname }}:/home/tcarter/Pictures/{{ source_folder }}/
+      delegate_to: localhost

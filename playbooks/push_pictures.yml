@@ -12,5 +12,5 @@
     - name: Rsync pictures to remote host
       command: >
         rsync -av --delete /Volumes/PICTURES/KioskDisplay/FamilyPhotos/{{ source_folder }}/
-        tcarter@{{ inventory_hostname }}:/home/tcarter/Pictures/{{ source_folder }}/
+        tcarter@{{ inventory_hostname }}:/home/tcarter/Pictures/
       delegate_to: localhost

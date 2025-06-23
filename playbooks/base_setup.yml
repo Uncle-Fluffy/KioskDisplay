@@ -1,7 +1,7 @@
 ---
 - name: Base setup on all hosts
   hosts: all
-  become: yes
+  become: true
   vars:
     ansible_user: tcarter
     slideshow_script_local: "../files/start-slideshow.sh"  # Relative path to start-slideshow.sh
@@ -13,7 +13,7 @@
   tasks:
     - name: Update apt cache
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
         cache_valid_time: 3600
 
     - name: Upgrade all packages
@@ -22,11 +22,11 @@
 
     - name: Autoremove unnecessary packages
       ansible.builtin.apt:
-        autoremove: yes
+        autoremove: true
 
     - name: Install essential packages (fbi, jq, watchdog)
       ansible.builtin.apt:
-        name: 
+        name:
           - fbi
           - jq
           - watchdog
@@ -79,7 +79,7 @@
     - name: Enable watchdog service
       ansible.builtin.systemd:
         name: watchdog
-        enabled: yes
+        enabled: true
         state: stopped
 
     - name: Create dimmed directories for evening and night
@@ -98,13 +98,13 @@
       register: dm_status
       changed_when: false
       failed_when: false
-      check_mode: no
+      check_mode: false
 
     - name: Stop and disable lightdm.service if active
       ansible.builtin.systemd:
         name: lightdm.service # Hardcoded directly
         state: stopped
-        enabled: no
+        enabled: false
       when: dm_status.stdout == "active"
       notify: Reboot Pi
 
@@ -132,7 +132,7 @@
     - name: Enable and start fbi-slideshow service
       ansible.builtin.systemd:
         name: fbi-slideshow
-        enabled: yes
+        enabled: true
         state: started
 
   handlers:
@@ -140,13 +140,13 @@
       ansible.builtin.systemd:
         name: watchdog
         state: restarted
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Restart fbi-slideshow
       ansible.builtin.systemd:
         name: fbi-slideshow
         state: restarted
-        daemon_reload: yes
+        daemon_reload: true
 
     - name: Reboot Pi
       ansible.builtin.reboot:

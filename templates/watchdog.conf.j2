@@ -1,0 +1,22 @@
+# ===================================================================
+# This file is managed by Ansible. Final Production Version.
+# ===================================================================
+
+# The hardware device to use.
+watchdog-device = /dev/watchdog
+
+# --- Main Settings ---
+
+# The hardware timeout in seconds.
+watchdog-timeout = 15
+
+# --- Self-Healing Checks ---
+
+# Explicitly disable the built-in interface auto-detection.
+# This is critical to prevent conflicts with our custom script.
+interface =
+
+# Use our custom script as the ONLY check.
+# Give the script a 10-second timeout.
+test-timeout = 10
+test-binary = /usr/local/bin/check-network.sh

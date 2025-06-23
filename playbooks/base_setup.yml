@@ -8,6 +8,7 @@
     slideshow_script_remote: "/home/{{ ansible_user }}/start-slideshow.sh"
     systemd_service_local: "../files/fbi-slideshow.service"  # Relative path to fbi-slideshow.service
     systemd_service_remote: "/etc/systemd/system/fbi-slideshow.service"
+    watchdog_interface: "wlan0"       # Change to 'eth0' if using wired
 
   tasks:
     - name: Update apt cache
@@ -23,15 +24,63 @@
       ansible.builtin.apt:
         autoremove: yes
 
-    - name: Install fbi
+    - name: Install essential packages (fbi, jq, watchdog)
       ansible.builtin.apt:
-        name: fbi
+        name: 
+          - fbi
+          - jq
+          - watchdog
         state: present
 
-    - name: Install jq
-      ansible.builtin.apt:
-        name: jq
-        state: present
+    - name: Grant bash the CAP_NET_RAW capability for watchdog script
+      ansible.builtin.command:
+        cmd: setcap cap_net_raw=+ep /bin/bash
+
+    - name: Disable wd_keepalive to prevent shutdown conflicts
+      ansible.builtin.lineinfile:
+        path: /etc/default/watchdog
+        regexp: '^run_wd_keepalive='
+        line: 'run_wd_keepalive=0'
+      notify: Reload daemon and restart watchdog
+
+    - name: Create systemd drop-in directory for watchdog service
+      ansible.builtin.file:
+        path: /etc/systemd/system/watchdog.service.d
+        state: directory
+        mode: '0755'
+
+    - name: Copy watchdog service override to delay start until time is synced
+      ansible.builtin.copy:
+        src: ../files/systemd/watchdog.service.d/override.conf
+        dest: /etc/systemd/system/watchdog.service.d/override.conf
+        mode: '0644'
+      notify: Reload daemon and restart watchdog
+
+    - name: Copy dynamic network check script for watchdog
+      ansible.builtin.copy:
+        src: ../files/check-network.sh
+        dest: /usr/local/bin/check-network.sh
+        mode: '0755'
+
+    - name: Configure watchdog service from template
+      ansible.builtin.template:
+        src: ../templates/watchdog.conf.j2
+        dest: /etc/watchdog.conf
+        mode: '0644'
+      notify: Reload daemon and restart watchdog
+
+    - name: Enable hardware watchdog in boot config
+      ansible.builtin.lineinfile:
+        path: /boot/firmware/config.txt
+        regexp: '^dtparam=watchdog='
+        line: 'dtparam=watchdog=on'
+      notify: Reboot Pi
+
+    - name: Enable watchdog service
+      ansible.builtin.systemd:
+        name: watchdog
+        enabled: yes
+        state: stopped
 
     - name: Create dimmed directories for evening and night
       ansible.builtin.file:
@@ -57,7 +106,7 @@
         state: stopped
         enabled: no
       when: dm_status.stdout == "active"
-      notify: Reboot Pi for display manager change
+      notify: Reboot Pi
 
     - name: Ensure system boots to multi-user target (no GUI)
       ansible.builtin.command: systemctl set-default multi-user.target
@@ -80,27 +129,28 @@
         mode: '0644'
       notify: Restart fbi-slideshow
 
-    - name: Enable fbi-slideshow service
+    - name: Enable and start fbi-slideshow service
       ansible.builtin.systemd:
         name: fbi-slideshow
         enabled: yes
-
-    - name: Start fbi-slideshow service
-      ansible.builtin.systemd:
-        name: fbi-slideshow
         state: started
 
-  handlers: # Add this section at the end of your playbook (same indentation level as 'tasks')
+  handlers:
+    - name: Reload daemon and restart watchdog
+      ansible.builtin.systemd:
+        name: watchdog
+        state: restarted
+        daemon_reload: yes
+
     - name: Restart fbi-slideshow
       ansible.builtin.systemd:
         name: fbi-slideshow
         state: restarted
         daemon_reload: yes
 
-    - name: Reboot Pi for display manager change
-      listen: "Reboot Pi for display manager change"
+    - name: Reboot Pi
       ansible.builtin.reboot:
-        msg: "Rebooting Pi to apply display manager change (boot to CLI)."
+        msg: "Rebooting Pi to apply critical configuration changes."
         connect_timeout: 5
         reboot_timeout: 300
         pre_reboot_delay: 0
@@ -128,3 +178,7 @@
 # To execute the start-slideshow.sh script directly, run:
 #   sudo ./start-slideshow.sh
 #
+# Watchdog
+# To test watchdog do this on the target host and wait a minute
+# sudo ip link set wlan0 down
+# should reboot on it's own

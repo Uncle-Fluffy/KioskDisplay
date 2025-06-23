@@ -18,7 +18,7 @@ get_location() {
     if [ -f "$CACHE_FILE" ]; then
       read -r LAT LON < "$CACHE_FILE"
     else
-      LOC=$(curl -s https://ipinfo.io/loc)
+      LOC=$(curl --max-time 5 -s https://ipinfo.io/loc)
       LAT=${LOC%,*}
       LON=${LOC#*,}
       if [ -z "$LAT" ] || [ -z "$LON" ]; then
@@ -34,7 +34,7 @@ get_location() {
 # Function to get SUNSET_MINUTES for today
 get_todays_sunset_minutes() {
     local sunset_iso
-    sunset_iso=$(curl -s "https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=sunset&timezone=auto&forecast_days=1" | jq -r '.daily.sunset[0]')
+    sunset_iso=$(curl --max-time 5 -s "https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&daily=sunset&timezone=auto&forecast_days=1" | jq -r '.daily.sunset[0]')
     if [ "$sunset_iso" == "null" ] || [ -z "$sunset_iso" ]; then
         # No logging
         echo 1080 # Default to 18:00
@@ -66,14 +66,17 @@ determine_target_dir() {
 start_fbi() {
     local dir_to_show="$1"
     [ -z "$dir_to_show" ] && return 1
-    setsid fbi -T 1 -a --noverbose -t 10 "$dir_to_show"/*.jpg > /dev/null 2>&1 &
+#    setsid fbi -T 1 -a --noverbose -t 10 "$dir_to_show"/*.jpg > /dev/null 2>&1 &
+    setsid fbi -T 1 -a -t 10 "$dir_to_show"/*.jpg > /dev/null 2>&1 &
 }
 
 # Function to stop FBI
 stop_fbi() {
-    pkill -f "fbi -T 1 -a --noverbose -t 10" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
+#    pkill -f "fbi -T 1 -a --noverbose -t 10" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
+    pkill -f "fbi -T 1" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
     sleep 0.5  # Brief pause to allow processes to terminate
-    pkill -9 -f "fbi -T 1 -a --noverbose -t 10" # Force kill any that didn't respond to SIGTERM (SIGKILL)
+#    pkill -9 -f "fbi -T 1 -a --noverbose -t 10" # Force kill any that didn't respond to SIGTERM (SIGKILL)
+    pkill -9 -f "fbi -T 1" # Force kill any that didn't respond to SIGTERM (SIGKILL)
 }
 
 # --- Main Logic ---
@@ -110,7 +113,8 @@ while true; do
         fi
     # If no scheduled transition, check if fbi for current period is alive
     elif [ -n "$CURRENT_IMG_DIR" ]; then # Only check if we expect fbi to be running
-        if ! pgrep -f "fbi -T 1 -a --noverbose -t 10" > /dev/null; then
+#        if ! pgrep -f "fbi -T 1 -a --noverbose -t 10" > /dev/null; then
+        if ! pgrep -f "fbi -T 1" > /dev/null; then
             # No fbi slideshow running with the core arguments, restart it
             start_fbi "$CURRENT_IMG_DIR"
         fi

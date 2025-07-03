@@ -129,11 +129,16 @@
         mode: '0644'
       notify: Restart fbi-slideshow
 
+    - name: Force systemd to reload daemon immediately to recognize changes
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: ansible_check_mode == false
+
     - name: Enable and start fbi-slideshow service
       ansible.builtin.systemd:
         name: fbi-slideshow
         enabled: true
-        state: started
+        state: restarted
 
   handlers:
     - name: Reload daemon and restart watchdog

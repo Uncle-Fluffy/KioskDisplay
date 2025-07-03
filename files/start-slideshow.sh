@@ -73,10 +73,10 @@ start_fbi() {
 # Function to stop FBI
 stop_fbi() {
 #    pkill -f "fbi -T 1 -a --noverbose -t 10" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
-    pkill -f "fbi -T 1" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
+    pkill -f "fbi -[T] 1" # Kill all fbi instances matching the pattern used by this script (SIGTERM first)
     sleep 0.5  # Brief pause to allow processes to terminate
 #    pkill -9 -f "fbi -T 1 -a --noverbose -t 10" # Force kill any that didn't respond to SIGTERM (SIGKILL)
-    pkill -9 -f "fbi -T 1" # Force kill any that didn't respond to SIGTERM (SIGKILL)
+    pkill -9 -f "fbi -[T] 1" # Force kill any that didn't respond to SIGTERM (SIGKILL)
 }
 
 # --- Main Logic ---
@@ -114,11 +114,14 @@ while true; do
     # If no scheduled transition, check if fbi for current period is alive
     elif [ -n "$CURRENT_IMG_DIR" ]; then # Only check if we expect fbi to be running
 #        if ! pgrep -f "fbi -T 1 -a --noverbose -t 10" > /dev/null; then
-        if ! pgrep -f "fbi -T 1" > /dev/null; then
+        if ! pgrep -f "fbi -[T] 1" > /dev/null; then
             # No fbi slideshow running with the core arguments, restart it
             start_fbi "$CURRENT_IMG_DIR"
         fi
     fi
+
+    # Tell systemd we are still alive and healthy
+    systemd-notify WATCHDOG=1
 
     sleep 60 # Check every 60 seconds - simpler and reliable for Pi Zero.
 done
